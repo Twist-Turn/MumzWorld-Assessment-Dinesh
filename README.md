@@ -6,7 +6,7 @@ A personalized parenting OS built as a technical assessment for Mumzworld. The p
 
 ## ✨ Features
 
-The app is organized into 12 modules:
+The app is organized into 9 modules:
 
 | Module | Description |
 |--------|-------------|
@@ -15,10 +15,7 @@ The app is organized into 12 modules:
 | **AI Lifecycle Feed** | Week-by-week AI agent feed showing current week ± context window. Expandable cards with milestone → product reasoning. |
 | **Smart Product Recommendations** | Filtered by week, budget, and save history. Confidence badges, wishlist, purchase tracking, and WhatsApp-shareable cards. |
 | **Checklist Engine** | AI-generated stage-aware checklists (Hospital Bag, Nursery Setup, Baby-Proofing, etc.) that auto-activate at the right week. |
-| **Budget Tracker** | Category-based spending breakdown with donut chart and AI-powered "you're over budget" alerts with alternatives. |
 | **Ask the Companion** | Persistent AI chat grounded in the user's profile. Bilingual, cites sources, and always defers medical questions to a doctor. |
-| **Saved & Purchased** | Wishlist sorted by stage relevance, purchase tracking, shareable list link, and PDF export. |
-| **Milestone Journal** | Weekly journal cards with free text and optional photo. Timeline view with "On this day" memory resurfacing. |
 | **Notifications & Nudges** | In-app notification center for week changes, checklist reminders, and product resurfaces. |
 | **Bilingual Everything** | Full English / Arabic toggle with RTL layout, Noto Sans Arabic font, and Arabic-Indic numerals. |
 | **Onboarding & Empty States** | 4-step onboarding, guest mode, AI-generated empty-state hints, and stage celebration moments. |
