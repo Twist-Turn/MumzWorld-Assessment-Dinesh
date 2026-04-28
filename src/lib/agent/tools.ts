@@ -1,13 +1,13 @@
 import { z } from "zod";
 import type { ChatCompletionTool } from "openai/resources/chat/completions";
-import { loadKB, loadProducts, getProductById, getKBById } from "../data";
+import { loadKB, loadProducts, getProductById } from "../data";
 import type { Profile, Product, KBEntry } from "../types";
 
 export const SearchProductsArgs = z.object({
-  age_months: z.number().int().nullable(),
-  category: z.enum(["feeding", "sleep", "gear", "health", "clothing", "toys", "maternity", "other"]).nullable(),
-  max_price_aed: z.number().nullable(),
-  query: z.string().nullable(),
+  age_months: z.number().int().nullable().default(null),
+  category: z.enum(["feeding", "sleep", "gear", "health", "clothing", "toys", "maternity", "other"]).nullable().default(null),
+  max_price_aed: z.number().nullable().default(null),
+  query: z.string().nullable().default(null),
 });
 
 export const LookupMilestoneArgs = z.object({
@@ -98,28 +98,123 @@ export type ToolResult = {
   data: unknown;
 };
 
+function normalizeText(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function queryTerms(query: string | null): string[] {
+  if (!query) return [];
+  const normalized = normalizeText(query);
+  const terms = new Set(normalized.split(/\s+/).filter((t) => t.length > 1));
+
+  const aliases: Record<string, string[]> = {
+    diaper: ["diapers", "nappy", "nappies"],
+    diapers: ["diaper", "nappy", "nappies"],
+    bottle: ["bottles", "anti colic"],
+    bottles: ["bottle", "anti colic"],
+    thermometer: ["forehead", "temperature"],
+    swaddle: ["swaddles", "muslin"],
+    swaddles: ["swaddle", "muslin"],
+    car: ["car seat", "rear facing", "infant car seat"],
+    seat: ["car seat", "rear facing", "infant car seat"],
+    stroller: ["travel system"],
+    marble: ["marble run", "marbles"],
+    toy: ["toys"],
+    high: ["high chair"],
+    chair: ["high chair"],
+    food: ["first foods", "bowl", "spoon"],
+    foods: ["first foods", "bowl", "spoon"],
+  };
+
+  for (const term of Array.from(terms)) {
+    for (const alias of aliases[term] ?? []) terms.add(alias);
+  }
+  return Array.from(terms);
+}
+
+function productText(product: Product): string {
+  return normalizeText([
+    product.id,
+    product.name_en,
+    product.name_ar,
+    product.description_en,
+    product.description_ar,
+    product.category,
+    product.safety_notes ?? "",
+  ].join(" "));
+}
+
+function productSearchScore(product: Product, args: z.infer<typeof SearchProductsArgs>): number {
+  let score = 0;
+  const text = productText(product);
+  const terms = queryTerms(args.query);
+
+  if (args.category) score += product.category === args.category ? 4 : -1;
+  if (args.age_months !== null) {
+    const age = args.age_months;
+    if (age >= product.age_range_min_months - 1 && age <= product.age_range_max_months + 6) score += 2;
+    else score -= 2;
+  }
+  if (args.max_price_aed !== null) score += product.price_aed <= args.max_price_aed ? 1 : -0.5;
+
+  if (args.query) {
+    const normalizedQuery = normalizeText(args.query);
+    if (text.includes(normalizedQuery)) score += 8;
+    for (const term of terms) {
+      if (text.includes(normalizeText(term))) score += term.includes(" ") ? 4 : 2;
+    }
+  }
+
+  return score;
+}
+
+function serializeProduct(p: Product, maxPriceAed: number | null) {
+  return {
+    id: p.id, name_en: p.name_en, name_ar: p.name_ar, category: p.category,
+    age_range_min_months: p.age_range_min_months, age_range_max_months: p.age_range_max_months,
+    price_aed: p.price_aed, within_budget: maxPriceAed === null ? null : p.price_aed <= maxPriceAed,
+    description_en: p.description_en, safety_notes: p.safety_notes,
+  };
+}
+
+function findBestProductMatch(raw: string): Product | null {
+  const query = raw.replace(/^prod_/, "").replace(/_/g, " ");
+  const args = SearchProductsArgs.parse({ query });
+  const matches = loadProducts()
+    .map((product) => ({ product, score: productSearchScore(product, args) }))
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+  return matches[0]?.product ?? null;
+}
+
 function searchProducts(args: z.infer<typeof SearchProductsArgs>): ToolResult {
   const all = loadProducts();
-  let results: Product[] = [...all];
-  if (args.category) results = results.filter((p) => p.category === args.category);
-  if (args.max_price_aed !== null) results = results.filter((p) => p.price_aed <= args.max_price_aed!);
-  if (args.age_months !== null) {
-    const a = args.age_months;
-    results = results.filter((p) => a >= p.age_range_min_months - 1 && a <= p.age_range_max_months + 6);
-  }
-  if (args.query) {
-    const q = args.query.toLowerCase();
-    results = results.filter((p) => p.name_en.toLowerCase().includes(q) || p.description_en.toLowerCase().includes(q) || p.category.includes(q));
-  }
-  results = results.slice(0, 8);
+  const hasQuery = Boolean(args.query?.trim());
+  const ranked = all
+    .map((product) => ({ product, score: productSearchScore(product, args) }))
+    .filter((x) => {
+      if (!hasQuery && args.category && x.product.category !== args.category) return false;
+      if (!hasQuery && args.max_price_aed !== null && x.product.price_aed > args.max_price_aed) return false;
+      return hasQuery ? x.score > 0 : x.score >= 0;
+    })
+    .sort((a, b) => b.score - a.score || a.product.price_aed - b.product.price_aed);
+
+  const results = ranked.slice(0, 8).map((x) => x.product);
+  const inBudgetCount = args.max_price_aed === null ? results.length : results.filter((p) => p.price_aed <= args.max_price_aed!).length;
+  const overBudgetCount = args.max_price_aed === null ? 0 : results.length - inBudgetCount;
+
+  const budgetSummary = args.max_price_aed === null
+    ? ""
+    : ` ${inBudgetCount} within budget${overBudgetCount ? `; ${overBudgetCount} matching catalog item(s) exceed ${args.max_price_aed} AED` : ""}.`;
+
   return {
     ok: true,
-    summary: `Found ${results.length} product(s).`,
-    data: results.map((p) => ({
-      id: p.id, name_en: p.name_en, name_ar: p.name_ar, category: p.category,
-      age_range_min_months: p.age_range_min_months, age_range_max_months: p.age_range_max_months,
-      price_aed: p.price_aed, description_en: p.description_en, safety_notes: p.safety_notes,
-    })),
+    summary: `Found ${results.length} product(s).${budgetSummary}`,
+    data: results.map((p) => serializeProduct(p, args.max_price_aed)),
   };
 }
 
@@ -133,13 +228,16 @@ function lookupMilestone(args: z.infer<typeof LookupMilestoneArgs>): ToolResult 
   let best = Math.abs(nearest.week_or_month - args.week_or_month);
   for (const e of stageEntries) {
     const d = Math.abs(e.week_or_month - args.week_or_month);
-    if (d < best) { best = d; nearest = e; }
+    if (d < best || (d === best && e.week_or_month > args.week_or_month && nearest.week_or_month < args.week_or_month)) {
+      best = d;
+      nearest = e;
+    }
   }
   return { ok: true, summary: `No exact match; nearest entry is ${nearest.id} at ${nearest.week_or_month}.`, data: nearest };
 }
 
 function checkSafety(args: z.infer<typeof CheckSafetyArgs>): ToolResult {
-  const product = getProductById(args.product_id);
+  const product = getProductById(args.product_id) ?? findBestProductMatch(args.product_id);
   if (!product) return { ok: false, summary: `Unknown product_id: ${args.product_id}.`, data: null };
   const age = args.child_age_months;
   if (age === null) {

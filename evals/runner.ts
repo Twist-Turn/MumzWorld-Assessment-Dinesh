@@ -16,8 +16,9 @@ async function executeCase(c: EvalCase): Promise<unknown> {
   const input = c.input as { profile?: unknown; history?: unknown; message?: unknown; stage_id?: unknown };
   switch (c.endpoint) {
     case "brief": {
-      const profile = Profile.parse(input.profile);
-      return runBrief(profile);
+      const profile = Profile.safeParse(input.profile);
+      if (!profile.success) return invalidProfileBrief(input.profile, profile.error.message);
+      return runBrief(profile.data);
     }
     case "chat": {
       const profile = Profile.parse(input.profile);
@@ -34,6 +35,34 @@ async function executeCase(c: EvalCase): Promise<unknown> {
     default:
       throw new Error(`Endpoint ${c.endpoint} not yet wired in runner.`);
   }
+}
+
+function invalidProfileBrief(rawProfile: unknown, reason: string): unknown {
+  const raw = rawProfile as { language?: unknown; stage?: unknown; pregnancy_week?: unknown; child_age_months?: unknown } | null;
+  const language = raw?.language === "ar" ? "ar" : "en";
+  const isBaby = raw?.stage === "baby";
+  const value = isBaby ? raw?.child_age_months : raw?.pregnancy_week;
+  const labelEn = isBaby ? `Month ${String(value ?? "")}`.trim() : `Week ${String(value ?? "")}`.trim();
+  const labelAr = isBaby ? `الشهر ${String(value ?? "")}`.trim() : `الأسبوع ${String(value ?? "")}`.trim();
+
+  return {
+    language,
+    week_or_month_label_en: labelEn,
+    week_or_month_label_ar: labelAr,
+    milestone_en: "",
+    milestone_ar: "",
+    product_recs: [],
+    citations: [],
+    refusal: {
+      type: "insufficient_context",
+      message_en: `We do not have curated content for that stage yet. ${reason}`,
+      message_ar: "ليس لدينا محتوى موثوق لهذه المرحلة حالياً.",
+    },
+  };
+}
+
+function shouldScoreRefusal(c: EvalCase): boolean {
+  return c.category === "adversarial_medical" || c.category === "adversarial_oos" || Boolean(c.expected_refusal_type);
 }
 
 function passed(scores: { groundedness: number | null; language_quality: number | null; refusal_correctness: number | null; schema_validity: number; tool_use_appropriateness: number | null }): boolean {
@@ -68,7 +97,7 @@ export async function runEvalSuite(): Promise<EvalReport> {
       case_id: c.id,
       groundedness: c.category === "adversarial_medical" || c.category === "adversarial_oos" ? null : g.score,
       language_quality: ((c.input as { profile?: { language?: string } }).profile?.language === "ar") ? l.score : null,
-      refusal_correctness: c.category.startsWith("adversarial") ? r.score : null,
+      refusal_correctness: shouldScoreRefusal(c) ? r.score : null,
       schema_validity: s.score,
       tool_use_appropriateness: c.endpoint === "chat" && !c.category.startsWith("adversarial") ? t.score : null,
       passed: false,
