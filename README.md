@@ -3,6 +3,7 @@
 A Next.js technical assessment for a bilingual parenting companion. The app builds a local profile for a pregnancy or baby stage, generates grounded stage briefs, answers parenting and shopping questions with tool use, and exposes an eval dashboard for AI quality checks.
 
 Live demo: [mumzworld-ai-companion-dinesh.netlify.app](https://mumzworld-ai-companion-dinesh.netlify.app/)  
+Screen Recording: [Video](https://drive.google.com/file/d/1BaYgEY9CtDde71-WSdDx-ypJk5wgeWeR/view?usp=sharing)
 Repository: [github.com/Twist-Turn/MumzWorld-Assessment-Dinesh](https://github.com/Twist-Turn/MumzWorld-Assessment-Dinesh)
 
 ## Features
