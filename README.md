@@ -2,7 +2,7 @@
 
 A personalized parenting OS built as a technical assessment for Mumzworld. The product reorganizes itself around each user's exact week of pregnancy or child's age, their language preference, budget, and city — every time they return, it picks up exactly where they left off.
 
-> **Live Demo:** [Netlify deployment] · **Repo:** [github.com/Twist-Turn/MumzWorld-Assessment-Dinesh](https://github.com/Twist-Turn/MumzWorld-Assessment-Dinesh)
+> **Live Demo:** [Netlify deployment](https://mumzworld-ai-companion-dinesh.netlify.app/) · **Repo:** [github.com/Twist-Turn/MumzWorld-Assessment-Dinesh](https://github.com/Twist-Turn/MumzWorld-Assessment-Dinesh)
 
 ---
 
