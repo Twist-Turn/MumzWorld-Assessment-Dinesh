@@ -4,7 +4,7 @@ A Next.js technical assessment for a bilingual parenting companion. The app buil
 
 Live demo: [mumzworld-ai-companion-dinesh.netlify.app](https://mumzworld-ai-companion-dinesh.netlify.app/)  
 Screen Recording: [Access the Screen Recording Video here](https://drive.google.com/file/d/1BaYgEY9CtDde71-WSdDx-ypJk5wgeWeR/view?usp=sharing)
-Repository: [github.com/Twist-Turn/MumzWorld-Assessment-Dinesh](https://github.com/Twist-Turn/MumzWorld-Assessment-Dinesh)
+
 
 ## Features
 
